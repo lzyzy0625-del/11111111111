@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Christmas AR Tree (CN Optimized)</title>
+    <title>Christmas AR Tree</title>
     <style>
         body, html, #root { 
             margin: 0; padding: 0; width: 100%; height: 100%; 
@@ -15,20 +15,21 @@
             text-align: center; width: 90%;
             pointer-events: none;
             font-family: monospace;
+            z-index: 1000;
         }
         .loading-text { color: #FFD700; font-size: 16px; margin-bottom: 10px; }
         .loading-sub { color: #888; font-size: 12px; }
-        .error-tip { color: #FF4444; font-size: 12px; margin-top: 15px; display: none; }
     </style>
 
-    <!-- 1. 使用国内 BootCDN 加速 Babel 解析器 -->
+    <!-- 1. Babel 编译器 -->
     <script src="https://cdn.bootcdn.net/ajax/libs/babel-standalone/7.23.5/babel.min.js"></script>
 
-    <!-- 2. Import Map: 使用 esm.sh (通常在国内比 unpkg 快，但为了稳妥，下面加了超时检测) -->
+    <!-- 2. Import Map (关键修复：添加了 react/jsx-runtime) -->
     <script type="importmap">
     {
         "imports": {
             "react": "https://esm.sh/react@18.2.0",
+            "react/jsx-runtime": "https://esm.sh/react@18.2.0/jsx-runtime",
             "react-dom/client": "https://esm.sh/react-dom@18.2.0/client",
             "three": "https://esm.sh/three@0.160.0",
             "@react-three/fiber": "https://esm.sh/@react-three/fiber@8.15.14?external=react,react-dom,three",
@@ -43,32 +44,27 @@
     </script>
 </head>
 <body>
+    <!-- 错误日志显示区 -->
+    <div id="debug-console" style="display:none; position:fixed; top:0; left:0; width:100%; height:40%; background:rgba(180,0,0,0.95); color:white; overflow:auto; z-index:99999; padding:15px; font-size:13px; font-family:monospace; border-bottom: 2px solid white;">
+        <strong>⚠️ ERROR LOG:</strong><br><br>
+    </div>
+    <script>
+        window.onerror = function (msg, url, lineNo, columnNo, error) {
+            var consoleDiv = document.getElementById('debug-console');
+            consoleDiv.style.display = 'block';
+            consoleDiv.innerHTML += '❌ ' + msg + '<br>Line: ' + lineNo + '<hr>';
+        };
+    </script>
+
     <div id="root">
         <div class="loading-container">
             <div class="loading-text">🚀 SYSTEM INITIALIZING...</div>
-            <div class="loading-sub">Downloading 3D Engine & AI Models</div>
-            <div id="timeout-msg" class="error-tip">
-                ⚠️ 加载时间过长<br>
-                1. 请尝试切换 Wi-Fi / 4G<br>
-                2. 如果使用了 VPN，请尝试关闭或开启<br>
-                3. 刷新页面重试
-            </div>
+            <div class="loading-sub">Loading 3D Engine & AI Models</div>
         </div>
     </div>
 
-    <!-- 超时检测脚本：如果10秒还没加载完，提示用户 -->
-    <script>
-        setTimeout(function() {
-            var root = document.getElementById('root');
-            // 如果 root 里还有 loading-container，说明 React 还没接管页面
-            if (root && root.querySelector('.loading-container')) {
-                document.getElementById('timeout-msg').style.display = 'block';
-            }
-        }, 8000);
-    </script>
-
-    <!-- 3. React 核心代码 -->
-    <script type="text/babel" data-type="module">
+    <!-- 3. React 代码 (关键修复：添加 data-presets="react" 强制正确解析) -->
+    <script type="text/babel" data-type="module" data-presets="react">
         import React, { useRef, useMemo, useState, useEffect, useCallback } from 'react';
         import { createRoot } from 'react-dom/client';
         import * as THREE from 'three';
@@ -91,7 +87,7 @@
                 wishGlow: '#FFD700',
             },
             tree: {
-                count: 12000,
+                count: 8000, // 略微减少粒子数以优化手机性能
                 height: 18,
                 radius: 8.0,
                 spiralLoops: 5.5,
@@ -140,7 +136,7 @@
                         fontFamily: 'sans-serif'
                     }}>
                         {isPlaying ? <PauseCircle size={14} /> : <PlayCircle size={14} className="animate-pulse"/>}
-                        {isPlaying ? "点击屏幕暂停 / TAP TO PAUSE" : "点击屏幕播放 / TAP TO PLAY"}
+                        {isPlaying ? "点击屏幕暂停" : "点击屏幕播放"}
                     </div>
                 </React.Fragment>
             );
@@ -169,14 +165,13 @@
         // --- IV. 摄像头与 AI ---
         const WebcamGestureManager = ({ onGesture }) => {
             const videoRef = useRef(null);
-            const [statusText, setStatusText] = useState("AI GESTURE LOADING...");
+            const [statusText, setStatusText] = useState("AI LOADING...");
             const [isError, setIsError] = useState(false);
 
             useEffect(() => {
                 let hands, camera, isActive = true;
 
                 const loadScripts = async () => {
-                    // 使用 jsDelivr 加速 MediaPipe
                     const scripts = [
                         'https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js',
                         'https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js'
@@ -199,7 +194,7 @@
                     } catch (err) {
                         console.error(err);
                         if (isActive) {
-                            setStatusText("AI LOAD FAILED (Check Network)");
+                            setStatusText("Network Error (VPN?)");
                             setIsError(true);
                         }
                     }
@@ -217,7 +212,7 @@
 
                     hands.setOptions({
                         maxNumHands: 1,
-                        modelComplexity: 0, // 降低复杂度以适应手机
+                        modelComplexity: 0,
                         minDetectionConfidence: 0.5,
                         minTrackingConfidence: 0.5
                     });
@@ -241,14 +236,14 @@
                             onFrame: async () => {
                                 if (hands && isActive) await hands.send({ image: videoRef.current });
                             },
-                            width: 640,  // 降低分辨率
+                            width: 640,
                             height: 480
                         });
                         camera.start()
-                            .then(() => { if (isActive) setStatusText(""); }) // 成功后清空文字
+                            .then(() => { if (isActive) setStatusText(""); }) 
                             .catch(() => {
                                 if (isActive) {
-                                    setStatusText("CAMERA DENIED (Please Allow)");
+                                    setStatusText("Allow Camera!");
                                     setIsError(true);
                                 }
                             });
@@ -288,7 +283,7 @@
             
             const geometryData = useMemo(() => {
                 const { count, height, radius, spiralLoops, outerThreshold } = CONFIG.tree;
-                const totalParticles = count + 2500; 
+                const totalParticles = count + 2000; 
                 const positions = new Float32Array(totalParticles * 3);
                 const colors = new Float32Array(totalParticles * 3);
                 
@@ -319,7 +314,7 @@
                             else tempColor.copy(Math.random() > 0.5 ? colorCore : colorSoft);
                         } else { tempColor.copy(Math.random() > 0.7 ? colorSoft : colorCore); }
                     } else {
-                        const t = (i - count) / 2500;
+                        const t = (i - count) / 2000;
                         y = (t - 0.5) * height;
                         const spiralR = (1 - t) * (radius + 0.5); 
                         const angle = t * spiralLoops * Math.PI * 2;
@@ -361,7 +356,7 @@
         const HeartTopper = ({ glowTexture }) => {
             const pointsRef = useRef(null);
             const { positions, colors } = useMemo(() => {
-                const count = 5000; const pos = []; const col = []; // 减少粒子数优化手机性能
+                const count = 4000; const pos = []; const col = [];
                 const cOutline = new THREE.Color('#D44D5C'); 
                 const cDeep = new THREE.Color('#8B0000');    
                 const cGold = new THREE.Color('#CCA000');    
