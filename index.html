@@ -3,33 +3,28 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Christmas AR Tree</title>
+    <title>Christmas AR Tree (CN Optimized)</title>
     <style>
-        /* 保持原有的全屏黑底样式 */
         body, html, #root { 
-            margin: 0; 
-            padding: 0; 
-            width: 100%; 
-            height: 100%; 
-            overflow: hidden; 
-            background: #000; 
-            touch-action: none; /* 防止手机端下拉刷新影响体验 */
+            margin: 0; padding: 0; width: 100%; height: 100%; 
+            overflow: hidden; background: #000; touch-action: none; 
         }
-        /* 加载提示 */
-        .loading-text {
+        .loading-container {
             position: fixed; top: 50%; left: 50%; 
             transform: translate(-50%, -50%);
-            color: #FFD700; font-family: monospace;
-            text-align: center;
-            width: 100%;
+            text-align: center; width: 90%;
             pointer-events: none;
+            font-family: monospace;
         }
+        .loading-text { color: #FFD700; font-size: 16px; margin-bottom: 10px; }
+        .loading-sub { color: #888; font-size: 12px; }
+        .error-tip { color: #FF4444; font-size: 12px; margin-top: 15px; display: none; }
     </style>
 
-    <!-- 1. Babel 编译器：用于在浏览器运行 React 代码 -->
-    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <!-- 1. 使用国内 BootCDN 加速 Babel 解析器 -->
+    <script src="https://cdn.bootcdn.net/ajax/libs/babel-standalone/7.23.5/babel.min.js"></script>
 
-    <!-- 2. Import Map：告诉浏览器去哪里下载依赖包 -->
+    <!-- 2. Import Map: 使用 esm.sh (通常在国内比 unpkg 快，但为了稳妥，下面加了超时检测) -->
     <script type="importmap">
     {
         "imports": {
@@ -48,35 +43,31 @@
     </script>
 </head>
 <body>
-    <!-- 🔥 错误诊断控制台 (默认隐藏，出错时自动显示) -->
-    <div id="debug-console" style="display:none; position:fixed; top:0; left:0; width:100%; height:40%; background:rgba(180,0,0,0.9); color:white; overflow:auto; z-index:99999; padding:15px; font-size:14px; font-family:monospace; border-bottom: 2px solid white;">
-        <strong>⚠️ ERROR LOG (截图发给开发者):</strong><br><br>
-    </div>
-    <script>
-        // 全局错误捕捉
-        window.onerror = function (msg, url, lineNo, columnNo, error) {
-            var consoleDiv = document.getElementById('debug-console');
-            consoleDiv.style.display = 'block';
-            consoleDiv.innerHTML += '❌ <strong>Error:</strong> ' + msg + '<br>📍 Line: ' + lineNo + '<hr>';
-            return false;
-        };
-        // 捕捉 Promise 错误 (如模型加载失败)
-        window.addEventListener('unhandledrejection', function (event) {
-            var consoleDiv = document.getElementById('debug-console');
-            consoleDiv.style.display = 'block';
-            consoleDiv.innerHTML += '⚠️ <strong>Promise Error:</strong> ' + (event.reason ? event.reason.toString() : 'Unknown') + '<hr>';
-        });
-    </script>
-
     <div id="root">
-        <div class="loading-text">
-            SYSTEM INITIALIZING...<br>
-            <span style="font-size:12px; opacity:0.7">Loading 3D Engine & AI Models</span><br>
-            <span style="font-size:10px; opacity:0.5; margin-top:10px; display:block">如果在微信/QQ中无法打开<br>请点击右上角选择"在浏览器打开"</span>
+        <div class="loading-container">
+            <div class="loading-text">🚀 SYSTEM INITIALIZING...</div>
+            <div class="loading-sub">Downloading 3D Engine & AI Models</div>
+            <div id="timeout-msg" class="error-tip">
+                ⚠️ 加载时间过长<br>
+                1. 请尝试切换 Wi-Fi / 4G<br>
+                2. 如果使用了 VPN，请尝试关闭或开启<br>
+                3. 刷新页面重试
+            </div>
         </div>
     </div>
 
-    <!-- 3. 主要 React 代码 -->
+    <!-- 超时检测脚本：如果10秒还没加载完，提示用户 -->
+    <script>
+        setTimeout(function() {
+            var root = document.getElementById('root');
+            // 如果 root 里还有 loading-container，说明 React 还没接管页面
+            if (root && root.querySelector('.loading-container')) {
+                document.getElementById('timeout-msg').style.display = 'block';
+            }
+        }, 8000);
+    </script>
+
+    <!-- 3. React 核心代码 -->
     <script type="text/babel" data-type="module">
         import React, { useRef, useMemo, useState, useEffect, useCallback } from 'react';
         import { createRoot } from 'react-dom/client';
@@ -88,7 +79,7 @@
         import { v4 as uuidv4 } from 'uuid';
         import { Hand, Sparkles as SparkleIcon, Cpu, Music, PauseCircle, PlayCircle } from 'lucide-react';
 
-        // --- I. 全局配置 ---
+        // --- I. 配置 ---
         const CONFIG = {
             colors: {
                 corePink: '#FF1053',
@@ -106,11 +97,10 @@
                 spiralLoops: 5.5,
                 outerThreshold: 0.7,
             },
-            // HTML 模式下，bgm.mp3 需在同级目录
             musicUrl: "./bgm.mp3" 
         };
 
-        // --- II. 智能背景音乐组件 ---
+        // --- II. 音乐组件 ---
         const BackgroundMusic = () => {
             const audioRef = useRef(null);
             const [isPlaying, setIsPlaying] = useState(false);
@@ -118,14 +108,9 @@
             useEffect(() => {
                 const audio = audioRef.current;
                 if (!audio) return;
-
-                const attemptAutoPlay = () => {
-                    audio.play()
-                        .then(() => setIsPlaying(true))
-                        .catch(() => console.log("等待点击交互"));
-                };
-                attemptAutoPlay();
-
+                // 尝试自动播放
+                audio.play().then(() => setIsPlaying(true)).catch(() => {});
+                
                 const handleGlobalToggle = (e) => {
                     if (e.target.tagName === 'INPUT' || e.target.tagName === 'BUTTON') return;
                     if (audio.paused) {
@@ -135,9 +120,8 @@
                         setIsPlaying(false);
                     }
                 };
-
                 window.addEventListener('click', handleGlobalToggle);
-                window.addEventListener('touchstart', handleGlobalToggle); // 增加触摸监听
+                window.addEventListener('touchstart', handleGlobalToggle);
                 return () => {
                     window.removeEventListener('click', handleGlobalToggle);
                     window.removeEventListener('touchstart', handleGlobalToggle);
@@ -182,18 +166,17 @@
             return t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2;
         }
 
-        // --- IV. 摄像头与 AI 手势识别 ---
+        // --- IV. 摄像头与 AI ---
         const WebcamGestureManager = ({ onGesture }) => {
             const videoRef = useRef(null);
-            const [isAiLoading, setIsAiLoading] = useState(true);
-            const [errorMsg, setErrorMsg] = useState(null);
+            const [statusText, setStatusText] = useState("AI GESTURE LOADING...");
+            const [isError, setIsError] = useState(false);
 
             useEffect(() => {
-                let hands;
-                let camera;
-                let isActive = true;
+                let hands, camera, isActive = true;
 
                 const loadScripts = async () => {
+                    // 使用 jsDelivr 加速 MediaPipe
                     const scripts = [
                         'https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js',
                         'https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js'
@@ -201,42 +184,40 @@
 
                     try {
                         for (const src of scripts) {
-                            // 防止重复加载
                             if (!document.querySelector(`script[src="${src}"]`)) {
                                 await new Promise((resolve, reject) => {
                                     const script = document.createElement('script');
                                     script.src = src;
                                     script.crossOrigin = "anonymous";
                                     script.onload = resolve;
-                                    script.onerror = (e) => reject("Script load failed: " + src);
+                                    script.onerror = reject;
                                     document.head.appendChild(script);
                                 });
                             }
                         }
                         if (isActive) initMediaPipe();
                     } catch (err) {
-                        console.error("AI Script Error", err);
-                        if (isActive) setErrorMsg("Network Error: AI Models Failed");
+                        console.error(err);
+                        if (isActive) {
+                            setStatusText("AI LOAD FAILED (Check Network)");
+                            setIsError(true);
+                        }
                     }
                 };
 
                 const initMediaPipe = () => {
-                    // 确保全局变量存在
                     if (!window.Hands || !window.Camera) {
                         setTimeout(initMediaPipe, 500);
                         return;
                     }
 
-                    const mpHands = window.Hands;
-                    const mpCamera = window.Camera;
-
-                    hands = new mpHands({
+                    hands = new window.Hands({
                         locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}`
                     });
 
                     hands.setOptions({
                         maxNumHands: 1,
-                        modelComplexity: 1,
+                        modelComplexity: 0, // 降低复杂度以适应手机
                         minDetectionConfidence: 0.5,
                         minTrackingConfidence: 0.5
                     });
@@ -256,31 +237,26 @@
                     });
 
                     if (videoRef.current) {
-                        camera = new mpCamera(videoRef.current, {
+                        camera = new window.Camera(videoRef.current, {
                             onFrame: async () => {
                                 if (hands && isActive) await hands.send({ image: videoRef.current });
                             },
-                            width: 1280, // 降低分辨率以提高手机性能
-                            height: 720
+                            width: 640,  // 降低分辨率
+                            height: 480
                         });
                         camera.start()
-                            .then(() => {
-                                if (isActive) setIsAiLoading(false);
-                            })
-                            .catch((e) => {
-                                console.error(e);
-                                if (isActive) setErrorMsg("Camera Access Denied: Please Allow");
+                            .then(() => { if (isActive) setStatusText(""); }) // 成功后清空文字
+                            .catch(() => {
+                                if (isActive) {
+                                    setStatusText("CAMERA DENIED (Please Allow)");
+                                    setIsError(true);
+                                }
                             });
                     }
                 };
 
                 loadScripts();
-
-                return () => {
-                    isActive = false;
-                    if (camera) camera.stop();
-                    if (hands) hands.close();
-                };
+                return () => { isActive = false; if(camera) camera.stop(); if(hands) hands.close(); };
             }, [onGesture]);
 
             return (
@@ -291,21 +267,21 @@
                         filter: 'brightness(0.35) contrast(1.2) blur(2px)', transform: 'scaleX(-1)',
                         pointerEvents: 'none'
                     }} />
-                    {(isAiLoading || errorMsg) && (
+                    {statusText && (
                         <div style={{
-                            position: 'fixed', top: 20, left: 20, zIndex: 200, color: errorMsg ? '#FF1053' : '#FFD700',
+                            position: 'fixed', top: 20, left: 20, zIndex: 200, color: isError ? '#FF1053' : '#FFD700',
                             fontSize: '12px', display: 'flex', alignItems: 'center', gap: 8,
                             background: 'rgba(0,0,0,0.6)', padding: '5px 10px', borderRadius: '4px', fontFamily: 'sans-serif'
                         }}>
-                            <Cpu size={14} className={errorMsg ? "" : "animate-pulse"} />
-                            {errorMsg ? errorMsg : "AI GESTURE LOADING..."}
+                            <Cpu size={14} className={isError ? "" : "animate-pulse"} />
+                            {statusText}
                         </div>
                     )}
                 </React.Fragment>
             );
         };
 
-        // --- V. 3D 圣诞树粒子系统 ---
+        // --- V. 3D 场景 ---
         const PinkTreeParticles = ({ isUnleashed }) => {
             const groupRef = useRef(null);
             const glowTexture = useMemo(() => createGlowTexture(), []);
@@ -333,21 +309,15 @@
                         const r = Math.max(0, rRaw + (Math.random()-0.5)*0.5);
                         const angle = Math.random() * Math.PI * 2;
                         x = r * Math.cos(angle); z = r * Math.sin(angle);
-
-                        const heightFactor = u; 
-                        const rRatio = r / currentMaxR; 
-                        const isOuter = rRatio > outerThreshold;
-                        const isTip = u < 0.15; 
+                        const heightFactor = u; const rRatio = r / currentMaxR; 
+                        const isOuter = rRatio > outerThreshold; const isTip = u < 0.15; 
                         if (isOuter && !isTip) {
                             const rnd = Math.random();
-                            const pPale = 0.25 * heightFactor; 
-                            const pGold = 0.15 * heightFactor; 
+                            const pPale = 0.25 * heightFactor; const pGold = 0.15 * heightFactor; 
                             if (rnd < pPale) tempColor.copy(colorPale);
                             else if (rnd < (pPale + pGold)) tempColor.copy(colorGold);
                             else tempColor.copy(Math.random() > 0.5 ? colorCore : colorSoft);
-                        } else {
-                            tempColor.copy(Math.random() > 0.7 ? colorSoft : colorCore);
-                        }
+                        } else { tempColor.copy(Math.random() > 0.7 ? colorSoft : colorCore); }
                     } else {
                         const t = (i - count) / 2500;
                         y = (t - 0.5) * height;
@@ -391,7 +361,7 @@
         const HeartTopper = ({ glowTexture }) => {
             const pointsRef = useRef(null);
             const { positions, colors } = useMemo(() => {
-                const count = 8000; const pos = []; const col = [];
+                const count = 5000; const pos = []; const col = []; // 减少粒子数优化手机性能
                 const cOutline = new THREE.Color('#D44D5C'); 
                 const cDeep = new THREE.Color('#8B0000');    
                 const cGold = new THREE.Color('#CCA000');    
@@ -438,8 +408,8 @@
             useFrame((_, delta) => { if(ref.current) ref.current.rotation.y -= delta * 0.2; });
             return (
                 <group ref={ref} position={[0, -CONFIG.tree.height / 2, 0]}>
-                    <Sparkles count={150} scale={[14, 1, 14]} size={12} color="#FFD700" />
-                    <Sparkles count={100} scale={[18, 2, 18]} size={8} color="#FF0055" />
+                    <Sparkles count={100} scale={[14, 1, 14]} size={12} color="#FFD700" />
+                    <Sparkles count={80} scale={[18, 2, 18]} size={8} color="#FF0055" />
                 </group>
             );
         };
@@ -458,12 +428,13 @@
             });
             return (
                 <group ref={ref}>
-                    <Sparkles count={50} scale={1.5} size={20} color={CONFIG.colors.wishGlow} />
+                    <Sparkles count={30} scale={1.5} size={20} color={CONFIG.colors.wishGlow} />
                     <Trail width={5} length={10} color={CONFIG.colors.wishCore}><mesh visible={false} /></Trail>
                 </group>
             );
         };
 
+        // --- VI. UI ---
         const UI = ({ onSend, isUnleashed, setIsUnleashed }) => {
             const [input, setInput] = useState("");
             return (
@@ -490,7 +461,9 @@
                                 {isUnleashed ? "ENERGY UNLEASHED!" : "SHOW PALM TO UNLEASH"}
                             </span>
                         </div>
-                        <p style={{ fontSize: '10px', color: 'rgba(255,255,255,0.5)', marginTop: 8, fontFamily: 'sans-serif' }}>PC端展示手掌 | 手机端点击按钮</p>
+                        <p style={{ fontSize: '10px', color: 'rgba(255,255,255,0.5)', marginTop: 8, fontFamily: 'sans-serif' }}>
+                            {window.innerWidth < 768 ? "Tap button to unlock" : "Show hand or tap"}
+                        </p>
                     </div>
 
                     <div style={{ width: '100%', display: 'flex', justifyContent: 'center', pointerEvents: 'auto', marginBottom: '20px' }}>
@@ -547,7 +520,7 @@
                     <BackgroundMusic />
                     <UI onSend={addWish} isUnleashed={isUnleashed} setIsUnleashed={setIsUnleashed} />
                     
-                    <Canvas dpr={[1, 2]} camera={{ position: [0, 2, 40], fov: 50 }} style={{position:'absolute', top:0, left:0}}>
+                    <Canvas dpr={[1, 1.5]} camera={{ position: [0, 2, 40], fov: 50 }} style={{position:'absolute', top:0, left:0}}>
                         <PerspectiveCamera makeDefault position={[0, 2, 40]} />
                         <OrbitControls enablePan={false} autoRotate={!isUnleashed} autoRotateSpeed={0.5} minDistance={15} maxDistance={70} />
                         
@@ -566,10 +539,10 @@
                                     </div>
                                 </Html>
                             ))}
-                            <Sparkles count={500} scale={60} size={4} speed={0.6} opacity={0.4} color="#FFF" />
+                            <Sparkles count={300} scale={60} size={4} speed={0.6} opacity={0.4} color="#FFF" />
                         </group>
 
-                        <EffectComposer multisampling={4}>
+                        <EffectComposer multisampling={0}>
                             <Bloom luminanceThreshold={0.2} mipmapBlur intensity={1.5} />
                             <Vignette darkness={0.7} offset={0.1} />
                         </EffectComposer>
